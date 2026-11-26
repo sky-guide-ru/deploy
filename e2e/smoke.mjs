@@ -52,7 +52,7 @@ async function waitReady() {
 
 const PAGES = [
   ['overview', 'Что делать прямо сейчас'], ['roadmap', 'план'], ['skills', 'Skills'], ['gear', 'Надето'],
-  ['accessories', 'Stats Tuning'], ['pets', 'Питомцы'], ['museum', 'Музей'], ['stash', 'Мешки'], ['stash/essence', 'Перки'], ['collections', 'Коллекции'], ['minions', 'Миньоны'], ['events', 'Мэр'], ['money', 'заработ'], ['money/bank', 'Как на самом деле работают проценты'], ['money/bits', 'монет даёт 1 Bit'], ['market', 'Bazaar'], ['wiki', 'Вики'], ['top', 'Рейтинг игроков'], ['news', 'Новости сайта'],
+  ['accessories', 'Что сделать дальше'], ['pets', 'Питомцы'], ['museum', 'Музей'], ['stash', 'Мешки'], ['stash/essence', 'Перки'], ['collections', 'Коллекции'], ['minions', 'Миньоны'], ['events', 'Мэр'], ['money', 'заработ'], ['money/bank', 'Как на самом деле работают проценты'], ['money/bits', 'монет даёт 1 Bit'], ['market', 'Bazaar'], ['wiki', 'Вики'], ['top', 'Рейтинг игроков'], ['news', 'Новости сайта'],
 ];
 const BAD_TEXT = /\bundefined\b|\bNaN\b|\[object Object\]|Infinity/;
 const failures = [];
