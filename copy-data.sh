@@ -24,11 +24,14 @@ if [ "$MODE" = --test ]; then
   echo "письма и ИИ в тестовой копии выключены"
 fi
 chmod 600 .env
+# Если новая версия уже запущена (тестовый запуск), её api останавливаем ДО копирования: при остановке он записывает
+# свою память (рейтинг, историю цен, счётчики) в data/ и затёр бы скопированные файлы
+docker compose stop api >/dev/null 2>&1 || true
 # Кэш (база NEU, иконки, ответы Hypixel) не копируем: сайт скачает его заново
 tar -C "$OLD" -cf - --exclude=data/neu-repo.zip --exclude=data/icons --exclude=data/hypixel-cache data \
   | tar -C "$APP" -xf -
 cp -a "$OLD/packs/." packs/ 2>/dev/null || true
 cp -a "$OLD/db/icons/." db/icons/ 2>/dev/null || true
 chown -R 1000:1000 data
-docker compose up -d --force-recreate api
+docker compose up -d api
 echo "Готово: data $(du -sh data | cut -f1), паков $(ls packs/*.zip 2>/dev/null | wc -l), иконок $(ls db/icons 2>/dev/null | wc -l)"
