@@ -5,3 +5,5 @@ node_modules/
 /db/
 /packs/*
 !/packs/README.md
+/src/
+docker-compose.override.yml

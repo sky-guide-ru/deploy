@@ -24,13 +24,27 @@
 		Strict-Transport-Security "max-age=31536000"
 		-Server
 	}
-	reverse_proxy app:3000 {
-		# Адрес посетителя Caddy передаёт сам (X-Forwarded-For). Подделанные клиентом заголовки убираем,
-		# иначе лимит «ников с одного IP» обходился бы одной строчкой в запросе
-		header_up -CF-Connecting-IP
-		header_up -X-Real-IP
-		# Живые обновления (SSE) — без буфера
-		flush_interval -1
+	# Файлы сборки сайта (в имени хэш содержимого) Caddy отдаёт сам из общего тома с web: кэш навсегда.
+	# Всё остальное, включая сами страницы, идёт в api: он подставляет в index.html SEO, язык и настройки из .env
+	handle /assets/* {
+		root * /srv/web
+		# Кэш навсегда — только найденным файлам: ответ 404 браузер не должен запомнить
+		@found file
+		header @found Cache-Control "public, max-age=31536000, immutable"
+		header X-Content-Type-Options nosniff
+		file_server {
+			precompressed br zstd gzip
+		}
+	}
+	handle {
+		reverse_proxy api:3000 {
+			# Адрес посетителя Caddy передаёт сам (X-Forwarded-For). Подделанные клиентом заголовки убираем,
+			# иначе лимит «ников с одного IP» обходился бы одной строчкой в запросе
+			header_up -CF-Connecting-IP
+			header_up -X-Real-IP
+			# Живые обновления (SSE) — без буфера
+			flush_interval -1
+		}
 	}
 	# Сайт не ответил (перезапуск после выкладки, сбой): вместо пустой белой страницы с ошибкой 502 — короткое
 	# сообщение, и страница сама обновляется через 5 с. Только для открытия страниц: запросы /api и файлы получают ошибку как есть
@@ -42,7 +56,7 @@
 			header Content-Type "text/html; charset=utf-8"
 			respond <<HTML
 				<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-				<meta http-equiv="refresh" content="5"><title>SkyBlock</title></head>
+				<meta http-equiv="refresh" content="5"><title>Sky Guide</title></head>
 				<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#14141c;color:#e8e8f0;font:16px/1.5 system-ui,sans-serif;text-align:center">
 				<div style="padding:24px;max-width:520px"><p>Сайт обновляется или перезапускается. Страница откроется сама через несколько секунд.</p>
 				<p style="opacity:.7">The site is updating or restarting. This page will reload by itself in a few seconds.</p></div></body></html>

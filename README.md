@@ -1,19 +1,22 @@
 # Sky Guide · deploy
 
-Запуск сайта [sky-guide.ru](https://sky-guide.ru) на сервере: Docker, Caddy с HTTPS, автообновление из `main`, ночные бэкапы `data/`, браузерный прогон e2e.
+Запуск сайта [sky-guide.ru](https://sky-guide.ru) на сервере: Docker (api + web + Caddy + автообновление), HTTPS, ночные бэкапы `data/`, браузерный прогон e2e.
 
 ## Что внутри
 
 | Файл | Что там |
 |---|---|
-| `docker-compose.yml`, `DOCKER.md` | контейнеры и пошаговая инструкция |
-| `Caddyfile` | домен, HTTPS, журнал без IP |
-| `updater.sh`, `setup-vps.sh`, `backup.sh` | автообновление, первая настройка VPS, бэкапы |
-| `.env.example` | все настройки сайта с пояснениями |
-| `e2e/smoke.mjs` | прогон сайта в браузере: `npm run e2e` (рядом нужны `api` и `web`) |
+| `docker-compose.yml` | контейнеры `api`, `web`, `caddy`, `updater`, лимиты памяти |
+| `Caddyfile` | домен, HTTPS, файлы сборки из тома, остальное в api, журнал без IP |
+| `updater.sh` | автообновление из `main` трёх репо (deploy, api, web) с откатом |
+| `setup-vps.sh`, `set-domain.sh` | первая настройка VPS, домен и HTTPS |
+| `backup.sh`, `import-data.sh`, `copy-data.sh` | ночные копии `data/`, возврат копии, перенос данных |
+| `switch.sh`, `rollback.sh` | переключение с прежней сборки и откат |
+| `.env.example` | все настройки сайта с пояснениями, значения пустые |
+| `e2e/smoke.mjs` | прогон сайта в браузере: `npm run e2e` (рядом `api` и `web`, или `E2E_URL`) |
 | `docs/` | почта сайта, мониторинг |
 
-> Сейчас compose — от прежней сборки в один контейнер. Переход на `api` + `web` + Caddy + updater для трёх репо — в работе.
+Как запустить на сервере, переехать и откатиться — [DOCKER.md](DOCKER.md).
 
 ## Репо проекта
 
