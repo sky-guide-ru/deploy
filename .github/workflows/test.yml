@@ -15,3 +15,13 @@ jobs:
           node-version: 22
       - run: npm test
         working-directory: deploy
+      - name: docker compose и Caddyfile
+        working-directory: deploy
+        run: |
+          cp .env.example .env
+          mkdir -p src/api src/web
+          docker compose --profile vps config -q
+          for d in example.org ':80'; do
+            docker run --rm -e SITE_DOMAIN="$d" -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine \
+              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          done

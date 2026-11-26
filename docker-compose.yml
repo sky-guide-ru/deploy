@@ -1,75 +1,99 @@
-# Сайт в Docker. Инструкция: DOCKER.md
-#   app     — сам сайт (порт наружу не открыт, только через caddy)
-#   caddy   — отдаёт сайт на 80/443 и сам получает SSL-сертификат, когда задан SITE_DOMAIN
-#   updater — раз в минуту подтягивает main, пересобирает и перезапускает app (только на сервере:
-#             включается строкой COMPOSE_PROFILES=vps в .env)
-# Переменные SITE_DOMAIN, COMPOSE_PROFILES и все настройки сайта берутся из .env рядом с этим файлом.
-name: skyblock
+# Sky Guide на сервере. Пошагово: DOCKER.md
+#   api     — сервер сайта (репо api, клон в src/api): /api, /v1, вход, страницы с SEO. Наружу не открыт
+#   web     — собирает сайт (репо web, клон в src/web) и кладёт готовые файлы в общий том web_dist
+#   caddy   — порты 80/443, HTTPS-сертификат, файлы сборки /assets/* из тома, всё остальное — в api
+#   updater — следит за main трёх репо (deploy, api, web) и пересобирает только то, что изменилось
+#             (только на сервере: строка COMPOSE_PROFILES=vps в .env)
+# Все настройки — в .env рядом с этим файлом (пример: .env.example).
+name: sky-guide
+
+x-logs: &logs
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
 
 services:
-  app:
-    build: .
-    image: skyblock-tracker:local
+  api:
+    build: ./src/api
+    image: sky-guide-api:local
     env_file: .env
     environment:
       DATA_DIR: /app/data
       ICONS_DIR: /app/db/icons
+      PACKS_DIR: /app/packs
+      WEB_DIST: /app/web
       PORT: "3000"
       AUTH_LOCAL: "0"
       # Потолок данных JavaScript ниже лимита контейнера: тогда Node сам чистит память раньше, чем упрётся в лимит.
-      # Без него V8 берёт потолок от всей памяти VPS (~2 ГБ на 4 ГБ) и при росте контейнер убивается, а не чистится
+      # Без него V8 берёт потолок от всей памяти VPS (~2 ГБ на 4 ГБ), и при росте контейнер убивается, а не чистится
       NODE_OPTIONS: "--max-old-space-size=1024"
     volumes:
       - ./data:/app/data
       - ./packs:/app/packs:ro
       - ./db/icons:/app/db/icons:ro
+      # index.html, og.png и favicon.svg api читает сам: в страницу подставляются SEO, счётчик и настройки из .env
+      - web_dist:/app/web:ro
     expose:
       - "3000"
-    # Лимит — страховка: при утечке перезапустится только сайт, а Caddy, SSH и Docker останутся живы.
-    # 1,5 ГБ из 4 ГБ: остальное — система, Caddy, updater и сборка новой версии (npm ci + vite) рядом с работающим сайтом
+    # Лимит — страховка: при утечке перезапустится только api, а Caddy, SSH и Docker останутся живы.
+    # 1,5 ГБ из 4 ГБ: остальное — система, Caddy, updater и сборка новой версии рядом с работающим сайтом
     mem_limit: 1536m
+    depends_on:
+      - web
     restart: unless-stopped
-    logging: &logs
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+    logging: *logs
+
+  web:
+    build: ./src/web
+    image: sky-guide-web:local
+    # При старте копирует сборку в том (assets/ первыми, index.html последним; старые assets/ живут ещё 2 дня
+    # для открытых вкладок). Сама по себе наружу ничего не отдаёт: файлы раздаёт Caddy
+    volumes:
+      - web_dist:/out
+    mem_limit: 128m
+    restart: unless-stopped
+    logging: *logs
 
   caddy:
     image: caddy:2-alpine
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      # Порты меняются только для тестового запуска рядом с живым сайтом (DOCKER.md, «Тестовый запуск»)
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
     environment:
       # Пусто — сайт по http://IP-сервера. Домен — https://домен с сертификатом Let's Encrypt
       SITE_DOMAIN: ${SITE_DOMAIN:-:80}
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - web_dist:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
+      - api
+    mem_limit: 256m
     restart: unless-stopped
     logging: *logs
 
   updater:
     profiles: ["vps"]
     build:
-      context: deploy
+      context: .
       dockerfile: updater.Dockerfile
-    image: skyblock-updater:local
+    image: sky-guide-updater:local
     env_file: .env
     environment:
-      APP_DIR: /opt/skyblock-tracker
-    working_dir: /opt/skyblock-tracker
-    # Путь внутри должен совпадать с путём на сервере: updater сам вызывает docker compose
+      APP_DIR: ${APP_DIR:-/opt/sky-guide}
+    working_dir: ${APP_DIR:-/opt/sky-guide}
+    # Путь внутри совпадает с путём на сервере: updater сам вызывает docker compose с этой папкой
     volumes:
-      - /opt/skyblock-tracker:/opt/skyblock-tracker
+      - ${APP_DIR:-/opt/sky-guide}:${APP_DIR:-/opt/sky-guide}
       - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.ssh:/root/.ssh:ro
-    entrypoint: ["sh", "/opt/skyblock-tracker/deploy/updater.sh"]
+    entrypoint: ["sh", "${APP_DIR:-/opt/sky-guide}/updater.sh"]
+    mem_limit: 256m
     restart: unless-stopped
     logging: *logs
 
 volumes:
+  web_dist:
   caddy_data:
   caddy_config:
