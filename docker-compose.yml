@@ -1,0 +1,75 @@
+# Сайт в Docker. Инструкция: DOCKER.md
+#   app     — сам сайт (порт наружу не открыт, только через caddy)
+#   caddy   — отдаёт сайт на 80/443 и сам получает SSL-сертификат, когда задан SITE_DOMAIN
+#   updater — раз в минуту подтягивает main, пересобирает и перезапускает app (только на сервере:
+#             включается строкой COMPOSE_PROFILES=vps в .env)
+# Переменные SITE_DOMAIN, COMPOSE_PROFILES и все настройки сайта берутся из .env рядом с этим файлом.
+name: skyblock
+
+services:
+  app:
+    build: .
+    image: skyblock-tracker:local
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+      ICONS_DIR: /app/db/icons
+      PORT: "3000"
+      AUTH_LOCAL: "0"
+      # Потолок данных JavaScript ниже лимита контейнера: тогда Node сам чистит память раньше, чем упрётся в лимит.
+      # Без него V8 берёт потолок от всей памяти VPS (~2 ГБ на 4 ГБ) и при росте контейнер убивается, а не чистится
+      NODE_OPTIONS: "--max-old-space-size=1024"
+    volumes:
+      - ./data:/app/data
+      - ./packs:/app/packs:ro
+      - ./db/icons:/app/db/icons:ro
+    expose:
+      - "3000"
+    # Лимит — страховка: при утечке перезапустится только сайт, а Caddy, SSH и Docker останутся живы.
+    # 1,5 ГБ из 4 ГБ: остальное — система, Caddy, updater и сборка новой версии (npm ci + vite) рядом с работающим сайтом
+    mem_limit: 1536m
+    restart: unless-stopped
+    logging: &logs
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Пусто — сайт по http://IP-сервера. Домен — https://домен с сертификатом Let's Encrypt
+      SITE_DOMAIN: ${SITE_DOMAIN:-:80}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+    logging: *logs
+
+  updater:
+    profiles: ["vps"]
+    build:
+      context: deploy
+      dockerfile: updater.Dockerfile
+    image: skyblock-updater:local
+    env_file: .env
+    environment:
+      APP_DIR: /opt/skyblock-tracker
+    working_dir: /opt/skyblock-tracker
+    # Путь внутри должен совпадать с путём на сервере: updater сам вызывает docker compose
+    volumes:
+      - /opt/skyblock-tracker:/opt/skyblock-tracker
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.ssh:/root/.ssh:ro
+    entrypoint: ["sh", "/opt/skyblock-tracker/deploy/updater.sh"]
+    restart: unless-stopped
+    logging: *logs
+
+volumes:
+  caddy_data:
+  caddy_config:
