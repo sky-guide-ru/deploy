@@ -36,6 +36,8 @@ rebuild() { docker compose build app && docker compose up -d app; }
 
 if [ "${AUTO_UPDATE:-1}" = 0 ]; then log "выключено (AUTO_UPDATE=0)"; else log "включено, проверка каждые ${every} с"; fi
 
+cleanup # заодно убрать то, что накопилось до этой версии
+
 while true; do
   sleep "$every"
   [ "${AUTO_UPDATE:-1}" = 0 ] && continue
