@@ -21,13 +21,13 @@ Resend остаётся запасным: если напрямую не пол�
 
 ## Шаг 1. Включить прямую отправку на сервере
 
-В `/opt/skyblock-tracker/.env` добавь строку (строки `RESEND_API_KEY` и `MAIL_TO` не трогай, это запасной путь):
+В `/opt/sky-guide/.env` добавь строку (строки `RESEND_API_KEY` и `MAIL_TO` не трогай, это запасной путь):
 
 ```
 MAIL_DOMAIN=sky-guide.ru
 ```
 
-Применить: `ssh root@203.0.113.10 "cd /opt/skyblock-tracker && docker compose up -d"`.
+Применить: `ssh root@203.0.113.10 "cd /opt/sky-guide && docker compose up -d"`.
 
 При первом письме или проверке сайт сам создаст ключ DKIM в `data/mail/dkim-private.pem`. Этот файл никому не отдавай;
 он попадает в ночные копии вместе с `data/`. Если его удалить, сайт создаст новый ключ, и запись DKIM в DNS придётся заменить.
