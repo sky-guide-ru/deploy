@@ -5,6 +5,7 @@
 #   web    (src/web)   — пересобирает сайт, ждёт, пока новая сборка ляжет в общий том
 # Не собралось или не отвечает → возвращает прошлый коммит этого репо и этот коммит больше не ставит (ждёт исправления).
 # DEPLOY_MERGERS в .env — ставить только то, что слили в main эти логины GitHub (через запятую). Пусто — ставить всё из main.
+# После удачного обновления чистит образы без тега и кэш сборки старше суток (cleanup), чтобы не забивать диск.
 # Журнал — data/deploy-log.json, его показывает панель «Сервер» владельца.
 # Выключить: AUTO_UPDATE=0 в .env. Интервал: AUTO_UPDATE_SEC (по умолчанию 60, не меньше 20).
 set -u
@@ -120,6 +121,13 @@ apply() { # apply имя изменённые_файлы → 0 удачно
   esac
 }
 
+cleanup() { # после каждой сборки прошлый образ остаётся без тега (сотни МБ), плюс кэш сборки: диск рос на ~3 ГБ в сутки
+  # Только безопасное: образы без тега и кэш сборки старше суток. Тома (data, сборка сайта) и образы с тегом не трогаем
+  docker image prune -f >/dev/null 2>&1
+  docker builder prune -f --filter until=24h >/dev/null 2>&1
+  return 0
+}
+
 selfupdate() { # себя этим же контейнером пересоздать нельзя: Docker убьёт updater посреди команды
   docker compose build updater || { log "updater не собрался — работаю со старым"; return; }
   docker rm -f sky-guide-selfupdate >/dev/null 2>&1
@@ -162,6 +170,7 @@ check() { # check имя папка
     return 0
   fi
   log "$name: обновлено"
+  cleanup
   record update "{\"repo\":\"$name\",\"from\":\"$h7\",\"to\":\"$r7\",\"files\":$n}"
   if [ "$name" = deploy ] && printf '%s\n' "$changed" | grep -qE '^(updater\.sh|updater\.Dockerfile|docker-compose\.yml)$'; then
     log "изменился сам updater — перезапускаю его"
@@ -171,6 +180,8 @@ check() { # check имя папка
 
 if [ "${AUTO_UPDATE:-1}" = 0 ]; then log "выключено (AUTO_UPDATE=0)"
 else log "включено, проверка каждые ${every} с${DEPLOY_MERGERS:+, ставлю только слитое через PR}"; fi
+
+cleanup # заодно убрать то, что накопилось до этой версии
 
 while true; do
   sleep "$every"
