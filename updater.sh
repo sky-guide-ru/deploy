@@ -48,8 +48,17 @@ approved() { # approved папка старый новый → 0 да, 1 нет,
   for c in $(git -C "$1" rev-list --first-parent "$2..$3"); do
     j=$(gh "repos/$slug/commits/$c/pulls") || return 2
     pr=$(printf '%s' "$j" | jq -r --arg c "$c" '[.[] | select(.merge_commit_sha == $c and .merged_at != null)][0].number // empty')
-    [ -n "$pr" ] || { refused="коммит $(short "$c") попал в main не через PR"; return 1; }
-    j=$(gh "repos/$slug/pulls/$pr") || return 2
+    if [ -n "$pr" ]; then
+      j=$(gh "repos/$slug/pulls/$pr") || return 2
+    else
+      # GitHub иногда теряет связь «коммит → PR» (commits/…/pulls отдаёт []), хотя PR слит этим коммитом.
+      # Тогда берём номер из «(#N)» в заголовке squash-коммита и сверяем, что PR #N слит именно им
+      pr=$(git -C "$1" log -1 --format=%s "$c" | sed -nE 's/.*\(#([0-9]+)\)$/\1/p')
+      [ -n "$pr" ] && j=$(gh "repos/$slug/pulls/$pr") || j=''
+      [ -z "$pr" ] || [ -n "$j" ] || return 2
+      ok=$(printf '%s' "$j" | jq -r --arg c "$c" 'select(.merge_commit_sha == $c and .merged_at != null) | .number' 2>/dev/null)
+      [ -n "$ok" ] || { refused="коммит $(short "$c") попал в main не через PR"; return 1; }
+    fi
     who=$(printf '%s' "$j" | jq -r '.merged_by.login // empty' | tr 'A-Z' 'a-z')
     case ",$allow," in *",$who,"*) ;; *) refused="PR #$pr слил не тот, кто указан в DEPLOY_MERGERS"; return 1 ;; esac
   done
